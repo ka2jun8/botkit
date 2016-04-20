@@ -63,7 +63,6 @@ This bot demonstrates many of the core features of Botkit:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-
 if (!process.env.token) {
     console.log('Error: Specify token in environment');
     process.exit(1);
@@ -80,6 +79,7 @@ var bot = controller.spawn({
     token: process.env.token
 }).startRTM();
 
+var request = require('request');
 
 controller.hears(['hello', 'hi'], 'direct_message,direct_mention,mention', function(bot, message) {
 
@@ -247,110 +247,102 @@ function formatUptime(uptime) {
 
 
 controller.hears(['ごはん'], 'direct_message,direct_mention,mention', function(bot, message) {
+    var place, keyword;
     bot.startConversation(message, function(err, convo) {
         convo.ask('場所はどのへん？', [
             {
-                pattern: '',
+                default: true,
                 callback: function(response, convo) {
-                    console.log(response);
-                    console.log(convo);
+                    place = response.text;
+                    convo.say(response.text+'がいいのか〜');
+                    convo.next();
+
                     convo.ask('何系がいい？', [
                         {
-                            pattern: '',
+                            default: true,
                             callback: function(response, convo) {
-                                console.log(response);
-                                console.log(convo);
-                                convo.say('ふうん');
+                                keyword = response.text;
+
+                                searchGnavi(place, keyword, response.channel);
+
                                 convo.next();
                             }
                         }
                     ]);
+
                 }
             }
         ]);
     });
-/*
-            var json = req.body;
+});
 
-            console.log("kani::: "+JSON.stringify(json));
+function searchGnavi(place, keyword, channel){
+    console.log("kani::: place="+place+"/key="+keyword);
+    // ぐるなびAPI レストラン検索API
+    var gnavi_url = 'http://api.gnavi.co.jp/RestSearchAPI/20150630/';
+    console.log("gnavi = "+process.env.GNAVI_KEY);
+    // ぐるなび リクエストパラメータの設定
+    var gnavi_query = {
+        "keyid": process.env.GNAVI_KEY,
+        "format": "json",
+        "address": place,
+        "hit_per_page": 1,
+        "freeword": keyword,
+        "freeword_condition": 2
+    };
+    var gnavi_options = {
+        url: gnavi_url,
+        headers : {'Content-Type' : 'application/json; charset=UTF-8'},
+        qs: gnavi_query,
+        json: true
+    };
 
-            // 受信テキスト
-            var search_place = json['result'][0]['content']['text'];
-            var search_place_array = search_place.split("\n");
+    // 検索結果をオブジェクト化
+    var search_result = {};
 
-            //検索キーワード
-            var gnavi_keyword = "";
-            if(search_place_array.length == 2){
-                var keyword_array = search_place_array[1].split("、");
-                gnavi_keyword = keyword_array.join();
+    request.get(gnavi_options, function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+            if('error' in body){
+                console.log("検索エラー" + JSON.stringify(body));
+                return;
             }
 
-            console.log("kani::: place="+search_place+"/key="+gnavi_keyword);
+            // 店名
+            if('name' in body.rest){
+                search_result['name'] = body.rest.name;
+            }
+            // 画像
+            if('image_url' in body.rest){
+                search_result['shop_image1'] = body.rest.image_url.shop_image1;
+            }
+            // 住所
+            if('address' in body.rest){
+                search_result['address'] = body.rest.address;
+            }
+            // 緯度
+            if('latitude' in body.rest){
+                search_result['latitude'] = body.rest.latitude;
+            }
+            // 軽度
+            if('longitude' in body.rest){
+                search_result['longitude'] = body.rest.longitude;
+            }
+            // 営業時間
+            if('opentime' in body.rest){
+                search_result['opentime'] = body.rest.opentime;
+            }
 
-            // ぐるなびAPI レストラン検索API
-            var gnavi_url = 'http://api.gnavi.co.jp/RestSearchAPI/20150630/';
+            console.log("kani::: "+JSON.stringify(search_result));
 
-            console.log("gnavi = "+process.env.GNAVI_KEY);
-
-            // ぐるなび リクエストパラメータの設定
-            var gnavi_query = {
-                "keyid": process.env.GNAVI_KEY,
-                "format": "json",
-                "address": search_place_array[0],
-                "hit_per_page": 1,
-                "freeword": gnavi_keyword,
-                "freeword_condition": 2
+            var advice = {
+                text: 'ここはどう？\n【お店】' + search_result['name'] + '\n' +search_result['shop_image1'] + '\n' + search_result['address'],
+                channel: channel
             };
-            var gnavi_options = {
-                url: gnavi_url,
-                headers : {'Content-Type' : 'application/json; charset=UTF-8'},
-                qs: gnavi_query,
-                json: true
-            };
+            bot.say(advice);
 
-            // 検索結果をオブジェクト化
-            var search_result = {};
+        } else {
+            console.log('error: '+ response.statusCode);
+        }
+    });
+}
 
-            request.get(gnavi_options, function (error, response, body) {
-                if (!error && response.statusCode == 200) {
-                    if('error' in body){
-                        console.log("検索エラー" + JSON.stringify(body));
-                        return;
-                    }
-
-                    // 店名
-                    if('name' in body.rest){
-                        search_result['name'] = body.rest.name;
-                    }
-                    // 画像
-                    if('image_url' in body.rest){
-                        search_result['shop_image1'] = body.rest.image_url.shop_image1;
-                    }
-                    // 住所
-                    if('address' in body.rest){
-                        search_result['address'] = body.rest.address;
-                    }
-                    // 緯度
-                    if('latitude' in body.rest){
-                        search_result['latitude'] = body.rest.latitude;
-                    }
-                    // 軽度
-                    if('longitude' in body.rest){
-                        search_result['longitude'] = body.rest.longitude;
-                    }
-                    // 営業時間
-                    if('opentime' in body.rest){
-                        search_result['opentime'] = body.rest.opentime;
-                    }
-
-                    console.log("kani::: "+JSON.stringify(search_result));
-
-                    callback(null, json, search_result);
-
-                } else {
-                    console.log('error: '+ response.statusCode);
-                }
-            });
-    */
-
-});
