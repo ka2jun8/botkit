@@ -3,6 +3,9 @@
   "version": "0.1.1",
   "description": "Building blocks for Building Bots",
   "main": "lib/Botkit.js",
+  "scripts": {
+    "start": "node slack_bot.js"
+  },
   "dependencies": {
     "back": "^1.0.1",
     "body-parser": "^1.14.2",
